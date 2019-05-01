@@ -259,6 +259,54 @@
                 codeParserGen,
                 150
             );
+
+            const linkParserGen = () => (ix, anchor, text) => {
+                ix += 1;
+                if (ix >= text.length) {
+                    if (anchor !== null) {
+                        if (anchor + 1 >= text.length) {
+                            return [ix - 1, anchor, null, true];
+                        } else {
+                            // backtrack!
+                            return [anchor + 1, null, null, false];
+                        }
+                    } else {
+                        return [ix - 1, anchor, null, true];
+                    }
+                }
+
+                if (text[ix] == '<') {
+                    if (anchor !== null) {
+                        return [ix, anchor, null, false];
+                    } else {
+                        return [ix, ix, null, false];
+                    }
+                    
+                } else if (text[ix] == '>') {
+                    if (anchor !== null) {
+                        // found a match!
+                        return [ix, null, [anchor, ix], false];
+                    }
+                }
+
+                return [ix, anchor, null, false];
+            };
+
+            new Demo(
+                document.getElementById("links"),
+                "My home page is <example.com>.",
+                linkParserGen,
+                200
+            );
+
+            const badLinkText = ' <'.repeat(10);
+
+            new Demo(
+                document.getElementById("bad-links"),
+                badLinkText,
+                linkParserGen,
+                150
+            );
         });
     </script>
 </head>
@@ -275,5 +323,15 @@
 
     <h2>Pathological code spans</h2>
     <demo id="bad-code"></demo>
+
+    <hr/>
+
+    <h2>Links</h2>
+    <demo id="links"></demo>
+
+    <hr/>
+
+    <h2>Pathological links</h2>
+    <demo id="bad-links"></demo>
 </body>
 </html>
