@@ -1,4 +1,4 @@
-section#display {
+section {
     font-family: monospace;
     font-size: 32px;
     margin-bottom: 1.5em;
@@ -32,8 +32,12 @@ char.final {
     background-color: rgb(62, 209, 123);
 }
 
-#controls {
-    max-width: 20em;
+span.index:before {
+    content: 'Index: ';
+}
+
+span.counter:before {
+    content: ', Probe count: ';
 }
 
 label:after {

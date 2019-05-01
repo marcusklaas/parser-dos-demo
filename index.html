@@ -7,151 +7,179 @@
     <link rel="stylesheet" type="text/css" href="style.css">
     <title>Scanner DoS Demo</title>
     <script>
-        const autoplayDelayMs = 300;
-        let ix = 0;
-        let probeCount = 0;
-        let text = `Hello *world*!`;
-        let anchor = null;
+        class Demo {
+            constructor(container, text, parseFnGen, autoplayDelayMs = 300) {
+                this.container = container;
+                this.autoplayDelayMs = autoplayDelayMs;
+                this.text = text;
+                this.ix = 0;
+                this.probeCount = 0;
+                this.anchor = null;
+                this.parseFnGen = parseFnGen;
+                this.parseFn = parseFnGen();
 
-        const parseFnGen = () => {
-            let inside = false;
+                this.setupUI();
+                this.updateUI();
+            }
 
-            // parseFn takes the current ix, anchor and text
-            // and returns an anchor and a span
-            return (ix, anchor, text) => {
-                if (text[ix] == '*') {
-                    if (inside) {
-                        return [null, [anchor, ix]];
-                    } else {
-                        inside = true;
-                        return [ix, null];
-                    }
-                    
+            setupUI() {
+                const self = this;
+
+                // Create display section
+                this.section = document.createElement("section");
+                for (const c of this.text) {
+                    const charElt = document.createElement("char");
+                    charElt.innerText = c;
+                    this.section.appendChild(charElt);
+                }
+                this.container.appendChild(this.section);
+
+                // Create form and its buttons
+                const form = document.createElement("form");
+                this.container.appendChild(form);
+
+                this.indexSpan = document.createElement("span");
+                this.indexSpan.classList.add("index");
+                form.appendChild(this.indexSpan);
+
+                this.counterSpan = document.createElement("span");
+                this.counterSpan.classList.add("counter");
+                form.appendChild(this.counterSpan);
+                form.appendChild(document.createElement('br'));
+
+                const nextButton = document.createElement("button");
+                nextButton.innerText = "next";
+                nextButton.type = "button";
+                nextButton.addEventListener("click", () => self.next());
+                form.appendChild(nextButton);
+
+                const resetButton = document.createElement("button");
+                resetButton.innerText = "reset";
+                resetButton.type = "button";
+                resetButton.addEventListener("click", () => self.reset());
+                form.appendChild(resetButton);
+
+                const autoplayButton = document.createElement("button");
+                autoplayButton.innerText = "autoplay";
+                autoplayButton.type = "button";
+                autoplayButton.addEventListener("click", () => self.autoplay());
+                form.appendChild(autoplayButton);
+            }
+
+            updateUI() {
+                // first deactivate any existing active nodes
+                for (const node of this.section.querySelectorAll("char.active")) {
+                    node.classList.remove("active");
                 }
 
-                return [anchor, null];
+                // activate node with given index
+                const node = this.section.querySelector(`char:nth-child(${this.ix + 1})`);
+                node.classList.add("active");
+
+                // unmark marked nodes
+                for (const node of this.section.querySelectorAll("char.marked")) {
+                    node.classList.remove("marked");
+                }
+
+                if (this.anchor !== null) {
+                    // anchor is set, lets mark nodes between anchor and
+                    // active node
+                    let marked = 0;
+                    const nodes = this.section.querySelectorAll(`char:nth-child(n + ${this.anchor + 1})`);
+                    for (const node of nodes) {
+                        node.classList.add("marked");
+                        marked += 1;
+                        if (marked > this.ix - this.anchor) {
+                            break;
+                        }
+                    }
+                }
+
+                // set form elements
+                this.indexSpan.innerHTML = this.ix;
+                this.counterSpan.innerHTML = this.probeCount;
             }
-        };
-        let parseFn = parseFnGen();
 
-        const updateUI = () => {
-            // first deactivate any existing active nodes
-            for (const node of document.querySelectorAll("char.active")) {
-                node.classList.remove("active");
-            }
+            markSpan(span) {
+                // unmark marked nodes
+                for (const node of this.section.querySelectorAll("char.marked")) {
+                    node.classList.remove("marked");
+                }
 
-            // activate node with given index
-            const node = document.querySelector(`char:nth-child(${ix + 1})`);
-            node.classList.add("active");
-
-            // unmark marked nodes
-            for (const node of document.querySelectorAll("char.marked")) {
-                node.classList.remove("marked");
-            }
-
-            if (anchor !== null) {
-                // anchor is set, lets mark nodes between anchor and
-                // active node
-                const markLimit = ix - anchor;
+                const [spanStart, spanEnd] = span;
+                const nodes = this.section.querySelectorAll(`char:nth-child(n + ${spanStart + 1})`);
                 let marked = 0;
-                const nodes = document.querySelectorAll(`char:nth-child(n + ${anchor + 1})`);
                 for (const node of nodes) {
-                    node.classList.add("marked");
+                    node.classList.add("final");
                     marked += 1;
-                    if (marked > markLimit) {
+                    if (marked > spanEnd - spanStart) {
                         break;
                     }
                 }
             }
 
-            // set form elements
-            document.getElementById("index").innerHTML = ix;
-            document.getElementById("count").innerHTML = probeCount;
-        };
-
-        const markSpan = span => {
-            // unmark marked nodes
-            for (const node of document.querySelectorAll("char.marked")) {
-                node.classList.remove("marked");
-            }
-
-            const [spanStart, spanEnd] = span;
-            const nodes = document.querySelectorAll(`char:nth-child(n + ${spanStart + 1})`);
-            let marked = 0;
-            for (const node of nodes) {
-                node.classList.add("final");
-                marked += 1;
-                if (marked > spanEnd - spanStart) {
-                    break;
+            next() {
+                if (this.text.length > this.ix + 1) {
+                    this.ix += 1;
+                    this.probeCount += 1;
+                    const [newAnchor, span] = (this.parseFn)(this.ix, this.anchor, this.text);
+                    this.anchor = newAnchor;
+                    if (span !== null) {
+                        this.markSpan(span);
+                    }
                 }
+                this.updateUI();
             }
-        };
 
-        const next = () => {
-            if (text.length > ix + 1) {
-                ix += 1;
-                probeCount += 1;
-                const [newAnchor, span] = parseFn(ix, anchor, text);
-                anchor = newAnchor;
-                if (span !== null) {
-                    markSpan(span);
+            reset() {
+                // unmark marked nodes
+                for (const node of this.section.querySelectorAll("char.final")) {
+                    node.classList.remove("final");
                 }
-            }
-            updateUI();
-        };
 
-        const reset = () => {
-            // unmark marked nodes
-            for (const node of document.querySelectorAll("char.final")) {
-                node.classList.remove("final");
+                this.ix = 0;
+                this.probeCount = 0;
+                this.parseFn = this.parseFnGen();
+                this.updateUI();
             }
 
-            ix = 0;
-            probeCount = 0;
-            parseFn = parseFnGen();
-            updateUI();
-        };
-
-        const autoplay = () => {
-            next();
-            if (text.length > ix + 1) {
-                setTimeout(autoplay, autoplayDelayMs);
+            autoplay() {
+                const self = this;
+                this.next();
+                if (this.text.length > this.ix + 1) {
+                    setTimeout(() => self.autoplay(), this.autoplayDelayMs);
+                }
             }
         }
-
+    
         window.addEventListener("DOMContentLoaded", () => {
-            document.getElementById("next").addEventListener("click", next);
-            document.getElementById("reset").addEventListener("click", reset);
-            document.getElementById("autoplay").addEventListener("click", autoplay);
-            
-            const displaySection = document.getElementById("display");
-            displaySection.innerHTML = "";
+            new Demo(
+                document.getElementsByTagName("demo")[0],
+                "Hello *world*!",
+                () => {
+                    let inside = false;
 
-            for (const c of text) {
-                const charElt = document.createElement("char");
-                charElt.innerText = c;
-                displaySection.appendChild(charElt);
-            }
+                    // parseFn takes the current ix, anchor and text
+                    // and returns an anchor and a span
+                    return (ix, anchor, text) => {
+                        if (text[ix] == '*') {
+                            if (inside) {
+                                return [null, [anchor, ix]];
+                            } else {
+                                inside = true;
+                                return [ix, null];
+                            }
+                            
+                        }
 
-            updateUI();
+                        return [anchor, null];
+                    }
+                }
+            );
         });
     </script>
 </head>
 <body>
-    <section id="display">
-        <char>h</char>
-        <char>e</char>
-        <char>l</char>
-        <char>l</char>
-        <char>o</char>
-    </section>
-    <form id="controls">
-        <label for="index">Index</label><span id="index">0</span>
-        <label for="count">Probe count</label><span id="count">0</span>
-        <br/>
-        <button id="reset" type="button">Reset</button>
-        <button id="next" type="button">Next</button>
-        <button id="autoplay" type="button">Autoplay</button>
-    </form>
+    <demo/>
 </body>
 </html>
