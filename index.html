@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <link rel="stylesheet" type="text/css" href="style.css">
+    <title>Scanner DoS Demo</title>
+    <script>
+        const autoplayDelayMs = 300;
+        let ix = 0;
+        let probeCount = 0;
+        let text = `Hello *world*!`;
+        let anchor = null;
+
+        const parseFnGen = () => {
+            let inside = false;
+
+            // parseFn takes the current ix, anchor and text
+            // and returns an anchor and a span
+            return (ix, anchor, text) => {
+                if (text[ix] == '*') {
+                    if (inside) {
+                        return [null, [anchor, ix]];
+                    } else {
+                        inside = true;
+                        return [ix, null];
+                    }
+                    
+                }
+
+                return [anchor, null];
+            }
+        };
+        let parseFn = parseFnGen();
+
+        const updateUI = () => {
+            // first deactivate any existing active nodes
+            for (const node of document.querySelectorAll("char.active")) {
+                node.classList.remove("active");
+            }
+
+            // activate node with given index
+            const node = document.querySelector(`char:nth-child(${ix + 1})`);
+            node.classList.add("active");
+
+            // unmark marked nodes
+            for (const node of document.querySelectorAll("char.marked")) {
+                node.classList.remove("marked");
+            }
+
+            if (anchor !== null) {
+                // anchor is set, lets mark nodes between anchor and
+                // active node
+                const markLimit = ix - anchor;
+                let marked = 0;
+                const nodes = document.querySelectorAll(`char:nth-child(n + ${anchor + 1})`);
+                for (const node of nodes) {
+                    node.classList.add("marked");
+                    marked += 1;
+                    if (marked > markLimit) {
+                        break;
+                    }
+                }
+            }
+
+            // set form elements
+            document.getElementById("index").innerHTML = ix;
+            document.getElementById("count").innerHTML = probeCount;
+        };
+
+        const markSpan = span => {
+            // unmark marked nodes
+            for (const node of document.querySelectorAll("char.marked")) {
+                node.classList.remove("marked");
+            }
+
+            const [spanStart, spanEnd] = span;
+            const nodes = document.querySelectorAll(`char:nth-child(n + ${spanStart + 1})`);
+            let marked = 0;
+            for (const node of nodes) {
+                node.classList.add("final");
+                marked += 1;
+                if (marked > spanEnd - spanStart) {
+                    break;
+                }
+            }
+        };
+
+        const next = () => {
+            if (text.length > ix + 1) {
+                ix += 1;
+                probeCount += 1;
+                const [newAnchor, span] = parseFn(ix, anchor, text);
+                anchor = newAnchor;
+                if (span !== null) {
+                    markSpan(span);
+                }
+            }
+            updateUI();
+        };
+
+        const reset = () => {
+            // unmark marked nodes
+            for (const node of document.querySelectorAll("char.final")) {
+                node.classList.remove("final");
+            }
+
+            ix = 0;
+            probeCount = 0;
+            parseFn = parseFnGen();
+            updateUI();
+        };
+
+        const autoplay = () => {
+            next();
+            if (text.length > ix + 1) {
+                setTimeout(autoplay, autoplayDelayMs);
+            }
+        }
+
+        window.addEventListener("DOMContentLoaded", () => {
+            document.getElementById("next").addEventListener("click", next);
+            document.getElementById("reset").addEventListener("click", reset);
+            document.getElementById("autoplay").addEventListener("click", autoplay);
+            
+            const displaySection = document.getElementById("display");
+            displaySection.innerHTML = "";
+
+            for (const c of text) {
+                const charElt = document.createElement("char");
+                charElt.innerText = c;
+                displaySection.appendChild(charElt);
+            }
+
+            updateUI();
+        });
+    </script>
+</head>
+<body>
+    <section id="display">
+        <char>h</char>
+        <char>e</char>
+        <char>l</char>
+        <char>l</char>
+        <char>o</char>
+    </section>
+    <form id="controls">
+        <label for="index">Index</label><span id="index">0</span>
+        <label for="count">Probe count</label><span id="count">0</span>
+        <br/>
+        <button id="reset" type="button">Reset</button>
+        <button id="next" type="button">Next</button>
+        <button id="autoplay" type="button">Autoplay</button>
+    </form>
+</body>
+</html>
