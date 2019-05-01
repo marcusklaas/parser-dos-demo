@@ -15,6 +15,7 @@
                 this.ix = 0;
                 this.probeCount = 0;
                 this.anchor = null;
+                this.done = false;
                 this.parseFnGen = parseFnGen;
                 this.parseFn = parseFnGen();
 
@@ -119,14 +120,13 @@
             }
 
             next() {
-                if (this.text.length > this.ix + 1) {
-                    this.ix += 1;
-                    this.probeCount += 1;
-                    const [newAnchor, span] = (this.parseFn)(this.ix, this.anchor, this.text);
-                    this.anchor = newAnchor;
-                    if (span !== null) {
-                        this.markSpan(span);
-                    }
+                this.probeCount += 1;
+                const [ix, anchor, span, done] = (this.parseFn)(this.ix, this.anchor, this.text);
+                this.anchor = anchor;
+                this.ix = ix;
+                this.done = done;
+                if (span !== null) {
+                    this.markSpan(span);
                 }
                 this.updateUI();
             }
@@ -137,6 +137,7 @@
                     node.classList.remove("final");
                 }
 
+                this.done = false;
                 this.ix = 0;
                 this.probeCount = 0;
                 this.parseFn = this.parseFnGen();
@@ -146,7 +147,7 @@
             autoplay() {
                 const self = this;
                 this.next();
-                if (this.text.length > this.ix + 1) {
+                if (!this.done) {
                     setTimeout(() => self.autoplay(), this.autoplayDelayMs);
                 }
             }
@@ -154,32 +155,125 @@
     
         window.addEventListener("DOMContentLoaded", () => {
             new Demo(
-                document.getElementsByTagName("demo")[0],
+                document.getElementById("emphasis"),
                 "Hello *world*!",
-                () => {
-                    let inside = false;
-
-                    // parseFn takes the current ix, anchor and text
-                    // and returns an anchor and a span
-                    return (ix, anchor, text) => {
-                        if (text[ix] == '*') {
-                            if (inside) {
-                                return [null, [anchor, ix]];
-                            } else {
-                                inside = true;
-                                return [ix, null];
-                            }
-                            
-                        }
-
-                        return [anchor, null];
+                () => (ix, anchor, text) => {
+                    ix += 1;
+                    if (ix >= text.length) {
+                        return [ix - 1, anchor, null, true];
                     }
+
+                    if (text[ix] == '*') {
+                        if (anchor !== null) {
+                            return [ix, null, [anchor, ix], false];
+                        } else {
+                            inside = true;
+                            return [ix, ix, null, false];
+                        }
+                        
+                    }
+
+                    return [ix, anchor, null, false];
                 }
+            );
+
+            const codeParserGen = () => {
+                let openDelimLen = null;
+                let curDelimLen = null;
+
+                return (ix, anchor, text) => {
+                    ix += 1;
+                    if (ix >= text.length) {
+                        // reached the end of text
+                        if (openDelimLen !== null) {
+                            // we were scanning inside a delimiter
+                            if (openDelimLen == curDelimLen) {
+                                // success on the last char!
+                                return [ix - 1, null, [anchor, ix - 1], true];
+                            } else {
+                                // backtrack to just after the opening of the delim
+                                // and continue
+                                ix = anchor + openDelimLen;
+                                openDelimLen = null;
+                                curDelimLen = null;
+                                return [ix, null, null, false];
+                            }
+                        } else {
+                            // we are not inside a delim, so there's nothing left
+                            // to do
+                            return [ix - 1, anchor, null, true];
+                        }
+                    }
+
+                    if (text[ix] == '`') {
+                        // scanning a delimiter
+                        if (curDelimLen === null) {
+                            curDelimLen = 1;
+                        } else {
+                            curDelimLen += 1;
+                        }
+                        return [ix, anchor || ix, null, false];
+                    } else {
+                        // not scanning a delimiter...
+                        if (curDelimLen !== null) {
+                            // ... but we just finished one ..
+                            if (openDelimLen !== null) {
+                                // ... and there was an opening one ..
+                                if (curDelimLen == openDelimLen) {
+                                    // .. and it's a match!
+                                    curDelimLen = null;
+                                    return [ix, null, [anchor, ix], false];
+                                } else {
+                                    // .. but it's not a match
+                                    curDelimLen = null;
+                                    return [ix, anchor, null, false];
+                                }
+                            } else {
+                                // .. but there was no opening one ..
+                                openDelimLen = curDelimLen;
+                                anchor = ix - curDelimLen;
+                                curDelimLen = null;
+                                return [ix, anchor, null, false];
+                            }
+                        } else {
+                            return [ix, anchor, null, false];
+                        }
+                    }
+                };
+            };
+
+            new Demo(
+                document.getElementById("code"),
+                "call `iter.collect()`",
+                codeParserGen
+            );
+
+            let badCodeText = "";
+            for (let i = 1; i < 7; i++) {
+                badCodeText += ' ' + '`'.repeat(i);
+            }
+
+            new Demo(
+                document.getElementById("bad-code"),
+                badCodeText,
+                codeParserGen,
+                150
             );
         });
     </script>
 </head>
 <body>
-    <demo/>
+    <h2>Emphasis</h2>
+    <demo id="emphasis"></demo>
+
+    <hr/>
+
+    <h2>Code spans</h2>
+    <demo id="code"></demo>
+
+    <hr/>
+
+    <h2>Pathological code spans</h2>
+    <demo id="bad-code"></demo>
 </body>
 </html>

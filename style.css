@@ -7,7 +7,6 @@ section {
 char {
     width: 1em;
     height: 1em;
-    /* margin-right: .125em; */
     padding-bottom: .1em;
     display: inline-block;
     border: black 1px solid;
