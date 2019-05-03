@@ -138,6 +138,7 @@
                 }
 
                 this.done = false;
+                this.anchor = null;
                 this.ix = 0;
                 this.probeCount = 0;
                 this.parseFn = this.parseFnGen();
@@ -294,7 +295,7 @@
 
             new Demo(
                 document.getElementById("links"),
-                "My home page is <example.com>.",
+                "Test your connection with <example.com>.",
                 linkParserGen,
                 200
             );
